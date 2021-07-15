@@ -18,6 +18,9 @@ from saml2.server import Server
 from saml2.sigver import verify_redirect_signature
 
 from queries import setup_database, get_user, save_user_key, get_user_key
+
+import sys
+sys.path.append('..')
 from utils.utils import ZKP_IdP, create_nonce, asymmetric_padding_signature, asymmetric_hash, create_get_url, \
 	Cipher_Authentication, \
 	asymmetric_upload_derivation_key, asymmetric_padding_encryption

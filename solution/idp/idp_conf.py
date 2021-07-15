@@ -60,7 +60,7 @@ CONFIG = {
         },
     },
     "metadata": {
-        "local": [full_path("sp.xml")],
+        "local": [full_path("../sp/sp.xml")],
     },
     'key_file': "idp_certificate/server.key",
     'cert_file': "idp_certificate/server.crt",
