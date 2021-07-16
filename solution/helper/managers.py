@@ -52,6 +52,38 @@ class Master_Password_Manager(object):
 
         return True
 
+    def update_user(self, new_username: str = '', new_password: str = ''):
+        with open(f"{KEYS_DIRECTORY}/users.json", "r+") as file:
+            users = {}
+            try:
+                users = json.load(file)
+            except Exception:
+                pass
+
+            # update the username
+            if new_username:
+                if new_username in users:
+                    return False
+                users[new_username] = users.pop(self.username)
+                self.username = new_username
+
+            # update the password
+            if new_password:
+                salt = urandom(AES_KEY_SALT_SIZE)
+                users[self.username] = {}
+                users[self.username]['salt'] = base64.b64encode(salt).decode()
+                users[self.username]['password'] = base64.b64encode(
+                    self.derivation_function(salt).derive(new_password)
+                ).decode()
+
+                self.master_password = new_password
+
+            file.seek(0, 0)
+            json.dump(users, file)
+            file.truncate()
+
+            return True
+
     def login(self) -> bool:
         with open(f"{KEYS_DIRECTORY}/users.json", "r") as file:
             users = json.load(file)
@@ -119,8 +151,8 @@ class Password_Manager(object):
             decrypter = aes_cipher(key=key, iv=iv).decryptor()
             block_size = algorithms.AES(key).block_size
             unpadder = padding.PKCS7(block_size).unpadder()
-            decrypted_data = decrypter.update(ciphered_password) + decrypter.finalize()
-            self.password = unpadder.update(decrypted_data) + unpadder.finalize()
+            decrypted_data = decrypter.update_user(ciphered_password) + decrypter.finalize()
+            self.password = unpadder.update_user(decrypted_data) + unpadder.finalize()
 
             return True
         except Exception:
@@ -160,8 +192,8 @@ class Password_Manager(object):
 
             block_size = algorithms.AES(key).block_size
             padder = padding.PKCS7(block_size).padder()
-            padded_data = padder.update(self.password) + padder.finalize()
-            file.write(encryptor.update(padded_data) + encryptor.finalize())
+            padded_data = padder.update_user(self.password) + padder.finalize()
+            file.write(encryptor.update_user(padded_data) + encryptor.finalize())
 
     def save_private_key(self, user_id: str, time_to_live: float):
         self.user_id = user_id

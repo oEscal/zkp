@@ -24,6 +24,7 @@ class HelperApp(object):
         self.saml_id: str = ''
         self.cipher_auth: Cipher_Authentication = None
         self.password_manager: Password_Manager = None
+        self.master_password_manager: Master_Password_Manager = None
 
     @staticmethod
     def static_contents(path):
@@ -144,31 +145,6 @@ class HelperApp(object):
                                                        params={'error_id': 'zkp_auth_error'}), 301)
 
     @cherrypy.expose
-    def keychain(self, username: str, password: str):
-        if cherrypy.request.method != 'POST':
-            raise cherrypy.HTTPError(405)
-
-        password = password.encode()
-
-        # verify master password
-        master_password_manager = Master_Password_Manager(username=username, master_password=password)
-        if not master_password_manager.login():
-            return Template(filename='static/keychain.html').render(message='Error: Unsuccessful login!')
-
-        self.password_manager = Password_Manager(username=username, master_password=password,
-                                                 idp=self.idp)
-        if not self.password_manager.load_password():
-            return Template(filename='static/authenticate.html').render(saml_id=self.saml_id)
-        else:
-            if not self.password_manager.load_private_key():
-                self.zkp_auth()
-            else:
-                self.asymmetric_auth()
-
-        raise cherrypy.HTTPRedirect(create_get_url(f"{self.idp}/identity",
-                                                   params={'saml_id': self.saml_id}))
-
-    @cherrypy.expose
     def zkp(self, password: str, saml_id: str):
         if cherrypy.request.method != 'POST':
             raise cherrypy.HTTPError(405)
@@ -201,7 +177,56 @@ class HelperApp(object):
         key = base64.urlsafe_b64decode(kwargs['key'])
         self.cipher_auth = Cipher_Authentication(key=key)
 
-        return Template(filename='static/keychain.html').render()
+        return Template(filename='static/keychain.html').render(action='auth')
+
+    @cherrypy.expose
+    def keychain(self, username: str, password: str, action: str = 'auth'):
+        if cherrypy.request.method != 'POST':
+            raise cherrypy.HTTPError(405)
+
+        password = password.encode()
+
+        # verify master password
+        self.master_password_manager = Master_Password_Manager(username=username, master_password=password)
+        if not self.master_password_manager.login():
+            return Template(filename='static/keychain.html').render(message='Error: Unsuccessful login!', action=action)
+
+        if action == 'update':
+            return Template(filename='static/update.html').render()
+        elif action == 'auth':
+            self.password_manager = Password_Manager(username=username, master_password=password,
+                                                     idp=self.idp)
+            if not self.password_manager.load_password():
+                return Template(filename='static/authenticate.html').render(saml_id=self.saml_id)
+            else:
+                if not self.password_manager.load_private_key():
+                    self.zkp_auth()
+                else:
+                    self.asymmetric_auth()
+
+            # end authentication and request the user's identification to the IdP
+            raise cherrypy.HTTPRedirect(create_get_url(f"{self.idp}/identity",
+                                                       params={'saml_id': self.saml_id}))
+
+    @cherrypy.expose
+    def update(self, **kwargs):
+        if cherrypy.request.method == 'GET':
+            return Template(filename='static/keychain.html').render(action='update')
+        elif cherrypy.request.method == 'POST':
+            username = ''
+            password = ''
+            if 'username' in kwargs and kwargs['username']:
+                username = kwargs['username']
+            if 'password' in kwargs and kwargs['password']:
+                password = kwargs['password'].encode()
+
+            if not self.master_password_manager.update_user(new_username=username, new_password=password):
+                return Template(filename='static/update.html').render(
+                    message='Error: Error updating the user!')
+            return Template(filename='static/update.html').render(
+                message='Success: The user was update with success')
+        else:
+            raise cherrypy.HTTPError(405)
 
     @cherrypy.expose
     def register(self, **kwargs):
@@ -214,7 +239,7 @@ class HelperApp(object):
             master_password_manager = Master_Password_Manager(username=username, master_password=master_password)
             if not master_password_manager.register_user():
                 return Template(filename='static/register.html').render(
-                    message='Error: The inserted user already exists!')
+                    message='Error: Error creating the new user!')
             return Template(filename='static/register.html').render(
                 message='Success: The user was registered with success')
         else:
