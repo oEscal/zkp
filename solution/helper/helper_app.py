@@ -45,7 +45,10 @@ class HelperApp(object):
                               "allowed by the local app. A possible cause for this is the IdP we are contacting is not "
                               "a trusted one!",
             'zkp_auth_error': "There was an error on ZKP authentication. This could mean that or the introduced "
-                              "password is incorrect, or the IdP we are contacting is not a trusted one!"
+                              "password or username are incorrect, or the IdP we are contacting is not a trusted one!",
+            'load_pass_error': "There was an error on loading the selected user credentials. Access the page "
+                               "'<a href=\"/update_idp_credentials\">update_idp_credentials</a>' to update this user's"
+                               "local credentials."
         }
         return Template(filename='static/error.html').render(message=errors[error_id])
 
@@ -54,7 +57,7 @@ class HelperApp(object):
         ciphered_params = self.cipher_auth.create_response({
             'user_id': self.password_manager.user_id,
             'nonce': nonce_to_send.decode(),
-            'username': self.password_manager.username
+            'username': self.password_manager.idp_username
         })
         response = requests.get(f"{self.idp}/authenticate_asymmetric",
                                 params={
@@ -96,7 +99,7 @@ class HelperApp(object):
             ciphered_params = self.cipher_auth.create_response({
                 **data_send,
                 **({
-                       'username': self.password_manager.username,
+                       'username': self.password_manager.idp_username,
                        'iterations': self.iterations
                    } if zkp.iteration < 2 else {})
             })
@@ -145,18 +148,6 @@ class HelperApp(object):
                                                        params={'error_id': 'zkp_auth_error'}), 301)
 
     @cherrypy.expose
-    def zkp(self, password: str, saml_id: str):
-        if cherrypy.request.method != 'POST':
-            raise cherrypy.HTTPError(405)
-
-        password = password.encode()
-        self.password_manager.password = password
-        self.zkp_auth()
-
-        raise cherrypy.HTTPRedirect(create_get_url(f"{self.idp}/identity",
-                                                   params={'saml_id': self.saml_id}))
-
-    @cherrypy.expose
     def authenticate(self, **kwargs):
         if cherrypy.request.method != 'GET':
             raise cherrypy.HTTPError(405)
@@ -201,19 +192,56 @@ class HelperApp(object):
         if action == 'update':
             return Template(filename='static/update.html').render()
         elif action == 'auth':
-            self.password_manager = Password_Manager(username=username, master_password=password,
-                                                     idp=self.idp)
-            if not self.password_manager.load_password():
-                return Template(filename='static/authenticate.html').render(saml_id=self.saml_id)
-            else:
-                if not self.password_manager.load_private_key():
-                    self.zkp_auth()
-                else:
-                    self.asymmetric_auth()
+            return Template(filename='static/select_idp_user.html').render(idp=self.idp,
+                                                                           users=self.master_password_manager.idp_users)
 
-            # end authentication and request the user's identification to the IdP
-            raise cherrypy.HTTPRedirect(create_get_url(f"{self.idp}/identity",
-                                                       params={'saml_id': self.saml_id}))
+    @cherrypy.expose
+    def select_idp_user(self, idp_user: str = ''):
+        if cherrypy.request.method != 'POST':
+            raise cherrypy.HTTPError(405)
+
+        if not idp_user or idp_user not in self.master_password_manager.idp_users:
+            # TODO
+            raise cherrypy.HTTPError()
+
+        master_username = self.master_password_manager.username
+        master_password = self.master_password_manager.master_password
+        self.password_manager = Password_Manager(master_username=master_username, master_password=master_password,
+                                                 idp_user=idp_user, idp=self.idp)
+
+        if not self.password_manager.load_password():
+            raise cherrypy.HTTPRedirect(create_get_url(f"http://zkp_helper_app:1080/error",
+                                                       params={'error_id': 'load_pass_error'}), 301)
+        else:
+            if not self.password_manager.load_private_key():
+                self.zkp_auth()
+            else:
+                self.asymmetric_auth()
+
+        # end authentication and request the user's identification to the IdP
+        raise cherrypy.HTTPRedirect(create_get_url(f"{self.idp}/identity",
+                                                   params={'saml_id': self.saml_id}))
+
+    @cherrypy.expose
+    def add_idp_user(self, username: str, password: str):
+        if cherrypy.request.method != 'POST':
+            raise cherrypy.HTTPError(405)
+
+        # update keychain registered idp users
+        if not self.master_password_manager.add_idp_user(username):
+            return Template(filename='static/select_idp_user.html').render(
+                message='Error: Error registering the new user!')
+
+        master_username = self.master_password_manager.username
+        master_password = self.master_password_manager.master_password
+        self.password_manager = Password_Manager(master_username=master_username, master_password=master_password,
+                                                 idp_user=username, idp=self.idp)
+
+        self.password_manager.password = password.encode()
+        self.zkp_auth()
+
+        raise cherrypy.HTTPRedirect(create_get_url(f"{self.idp}/identity",
+                                                   params={'saml_id': self.saml_id}))
 
     @cherrypy.expose
     def update(self, **kwargs):
@@ -228,10 +256,8 @@ class HelperApp(object):
                 password = kwargs['password'].encode()
 
             if not self.master_password_manager.update_user(new_username=username, new_password=password):
-                return Template(filename='static/update.html').render(
-                    message='Error: Error updating the user!')
-            return Template(filename='static/update.html').render(
-                message='Success: The user was update with success')
+                return Template(filename='static/update.html').render(message='Error: Error updating the user!')
+            return Template(filename='static/update.html').render(message='Success: The user was update with success')
         else:
             raise cherrypy.HTTPError(405)
 
