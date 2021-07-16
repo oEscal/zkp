@@ -45,7 +45,10 @@ class HelperApp(object):
                               "allowed by the local app. A possible cause for this is the IdP we are contacting is not "
                               "a trusted one!",
             'zkp_auth_error': "There was an error on ZKP authentication. This could mean that or the introduced "
-                              "password or username are incorrect, or the IdP we are contacting is not a trusted one!",
+                              "password or username are incorrect, or the IdP we are contacting is not a trusted one!"
+                              "<br>"
+                              "You can access the page '<a href=\"/update_idp_user\">/update_idp_user</a>' to update "
+                              "this user's credentials.",
             'load_pass_error': "There was an error on loading the selected user credentials. Access the page "
                                "'<a href=\"/update_idp_credentials\">update_idp_credentials</a>' to update this user's "
                                "local credentials."
@@ -268,35 +271,51 @@ class HelperApp(object):
             selected_idp = list(self.master_password_manager.idps.keys())[indexes[0]]
             selected_user = self.master_password_manager.idps[selected_idp][indexes[1]]
 
-            master_username = self.master_password_manager.username
+            message = self.update_idp_user_credentials(idp_user=selected_user, idp=selected_idp,
+                                                       username=kwargs['username'] if 'username' in kwargs else '',
+                                                       password=kwargs['password'] if 'password' in kwargs else '')
 
-            if 'username' in kwargs and kwargs['username']:
-                if not self.master_password_manager.update_idp_user(previous_idp_user=selected_user, idp=selected_idp,
-                                                                    new_idp_user=kwargs['username']):
-                    return Template(filename='static/update_idp_cred.html').render(
-                        idps=self.master_password_manager.idps,
-                        message="Error: Error updating the user's username!")
-                Password_Manager.update_idp_username(master_username=master_username,
-                                                     previous_idp_user=selected_user, idp=selected_idp,
-                                                     new_idp_user=kwargs['username'])
-
-                selected_user = kwargs['username']
-
-            if 'password' in kwargs and kwargs['password']:
-                master_password = self.master_password_manager.master_password
-                password_manager = Password_Manager(master_username=master_username, master_password=master_password,
-                                                    idp_user=selected_user, idp=selected_idp)
-
-                if not password_manager.update_idp_password(new_password=kwargs['password'].encode()):
-                    return Template(filename='static/update_idp_cred.html').render(
-                        idps=self.master_password_manager.idps,
-                        message="Error: Error updating the user's password!")
+            if not message:
+                message = 'Success: The user was updated with success'
 
             return Template(filename='static/update_idp_cred.html').render(
                 idps=self.master_password_manager.idps,
-                message='Success: The user was updated with success')
+                message=message)
         else:
             raise cherrypy.HTTPError(405)
+
+    @cherrypy.expose
+    def update_idp_user(self):
+        if cherrypy.request.method == 'GET':
+            return Template(filename='static/update_idp_user.html').render(idp=self.idp,
+                                                                           user=self.password_manager.idp_username)
+        elif cherrypy.request.method == 'POST':
+            pass
+
+    def update_idp_user_credentials(self, idp_user: str, idp: str,  username: str = '', password: str = '') -> str:
+        master_username = self.master_password_manager.username
+
+        # update username
+        if username:
+            if not self.master_password_manager.update_idp_user(previous_idp_user=idp_user, idp=idp,
+                                                                new_idp_user=username):
+                return "Error: Error updating the user's username!"
+            Password_Manager.update_idp_username(master_username=master_username,
+                                                 previous_idp_user=idp_user, idp=idp,
+                                                 new_idp_user=username)
+
+            idp_user = username
+
+        # update password
+        if password:
+            master_password = self.master_password_manager.master_password
+            password_manager = Password_Manager(master_username=master_username, master_password=master_password,
+                                                idp_user=idp_user, idp=idp)
+
+            if not password_manager.update_idp_password(new_password=password.encode()):
+                return "Error: Error updating the user's password!"
+
+        return ''
 
     @cherrypy.expose
     def update(self, **kwargs):
