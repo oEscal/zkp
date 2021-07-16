@@ -1,6 +1,5 @@
 import base64
 import json
-import uuid
 from datetime import datetime, timedelta
 from os import urandom
 
@@ -151,8 +150,8 @@ class Password_Manager(object):
             decrypter = aes_cipher(key=key, iv=iv).decryptor()
             block_size = algorithms.AES(key).block_size
             unpadder = padding.PKCS7(block_size).unpadder()
-            decrypted_data = decrypter.update_user(ciphered_password) + decrypter.finalize()
-            self.password = unpadder.update_user(decrypted_data) + unpadder.finalize()
+            decrypted_data = decrypter.update(ciphered_password) + decrypter.finalize()
+            self.password = unpadder.update(decrypted_data) + unpadder.finalize()
 
             return True
         except Exception:
@@ -192,8 +191,8 @@ class Password_Manager(object):
 
             block_size = algorithms.AES(key).block_size
             padder = padding.PKCS7(block_size).padder()
-            padded_data = padder.update_user(self.password) + padder.finalize()
-            file.write(encryptor.update_user(padded_data) + encryptor.finalize())
+            padded_data = padder.update(self.password) + padder.finalize()
+            file.write(encryptor.update(padded_data) + encryptor.finalize())
 
     def save_private_key(self, user_id: str, time_to_live: float):
         self.user_id = user_id

@@ -177,7 +177,14 @@ class HelperApp(object):
         key = base64.urlsafe_b64decode(kwargs['key'])
         self.cipher_auth = Cipher_Authentication(key=key)
 
-        return Template(filename='static/keychain.html').render(action='auth')
+        return Template(filename='static/login.html').render(idp=self.idp)
+
+    @cherrypy.expose
+    def login(self, **kwargs):
+        if 'deny' in kwargs:
+            return Template(filename='static/auth_refused.html').render()
+        elif 'allow' in kwargs:
+            return Template(filename='static/keychain.html').render(action='auth')
 
     @cherrypy.expose
     def keychain(self, username: str, password: str, action: str = 'auth'):

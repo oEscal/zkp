@@ -55,16 +55,16 @@ class Cipher_Authentication(object):
 
 		unpadder = padding.PKCS7(self.block_size).unpadder()
 		decrypter = cipher.decryptor()
-		decrypted_data = decrypter.update_user(base64.urlsafe_b64decode(data)) + decrypter.finalize()
-		return json.loads(unpadder.update_user(decrypted_data) + unpadder.finalize())
+		decrypted_data = decrypter.update(base64.urlsafe_b64decode(data)) + decrypter.finalize()
+		return json.loads(unpadder.update(decrypted_data) + unpadder.finalize())
 
 	def cipher_data(self, data, iv: bytes):
 		cipher = aes_cipher(key=self.key, iv=iv)
 
 		padder = padding.PKCS7(self.block_size).padder()
-		padded_data = padder.update_user(json.dumps(data).encode()) + padder.finalize()
+		padded_data = padder.update(json.dumps(data).encode()) + padder.finalize()
 		encryptor = cipher.encryptor()
-		return base64.urlsafe_b64encode(encryptor.update_user(padded_data) + encryptor.finalize()).decode()
+		return base64.urlsafe_b64encode(encryptor.update(padded_data) + encryptor.finalize()).decode()
 
 	def create_response(self, data) -> dict:
 		iv = urandom(16)
