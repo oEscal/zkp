@@ -26,7 +26,7 @@ class Master_Password_Manager(object):
     def __init__(self, username: str, master_password: bytes):
         self.username = username
         self.master_password = master_password
-        self.idp_users = []
+        self.idps = []
 
         self.create_file_if_not_exist()
 
@@ -47,7 +47,7 @@ class Master_Password_Manager(object):
                 self.derivation_function(salt).derive(self.master_password)
             ).decode()
 
-            users[self.username]['idp_users'] = []
+            users[self.username]['idps'] = {}
 
             file.seek(0, 0)
             json.dump(users, file)
@@ -85,14 +85,17 @@ class Master_Password_Manager(object):
 
             return True
 
-    def add_idp_user(self, idp_user) -> bool:
+    def add_idp_user(self, idp_user: str, idp: str) -> bool:
         with open(f"{KEYS_DIRECTORY}/users.json", "r+") as file:
             try:
                 users = json.load(file)
             except Exception:
                 return False
 
-            users[self.username]['idp_users'].append(idp_user)
+            if idp not in users[self.username]['idps']:
+                users[self.username]['idps'][idp] = []
+
+            users[self.username]['idps'][idp].append(idp_user)
 
             file.seek(0, 0)
             json.dump(users, file)
@@ -114,9 +117,14 @@ class Master_Password_Manager(object):
         except InvalidKey:
             return False
 
-        self.idp_users = users[self.username]['idp_users']
+        self.idps = users[self.username]['idps']
 
         return True
+
+    def get_users_for_idp(self, idp: str) -> list:
+        if idp not in self.idps:
+            return []
+        return self.idps[idp]
 
     @staticmethod
     def derivation_function(salt) -> Scrypt:

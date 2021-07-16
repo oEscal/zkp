@@ -192,17 +192,21 @@ class HelperApp(object):
         if action == 'update':
             return Template(filename='static/update.html').render()
         elif action == 'auth':
-            return Template(filename='static/select_idp_user.html').render(idp=self.idp,
-                                                                           users=self.master_password_manager.idp_users)
+            return Template(filename='static/select_idp_user.html').render(
+                idp=self.idp,
+                users=self.master_password_manager.get_users_for_idp(self.idp))
+        elif action == 'update_idp':
+            raise cherrypy.HTTPRedirect(create_get_url(f"/update_idp_credentials"), 301)
+        else:
+            raise cherrypy.HTTPError(401)
 
     @cherrypy.expose
     def select_idp_user(self, idp_user: str = ''):
         if cherrypy.request.method != 'POST':
             raise cherrypy.HTTPError(405)
 
-        if not idp_user or idp_user not in self.master_password_manager.idp_users:
-            # TODO
-            raise cherrypy.HTTPError()
+        if not idp_user or idp_user not in self.master_password_manager.get_users_for_idp(self.idp):
+            raise cherrypy.HTTPError(401)
 
         master_username = self.master_password_manager.username
         master_password = self.master_password_manager.master_password
@@ -228,7 +232,7 @@ class HelperApp(object):
             raise cherrypy.HTTPError(405)
 
         # update keychain registered idp users
-        if not self.master_password_manager.add_idp_user(username):
+        if not self.master_password_manager.add_idp_user(idp_user=username, idp=self.idp):
             return Template(filename='static/select_idp_user.html').render(
                 message='Error: Error registering the new user!')
 
@@ -242,6 +246,14 @@ class HelperApp(object):
 
         raise cherrypy.HTTPRedirect(create_get_url(f"{self.idp}/identity",
                                                    params={'saml_id': self.saml_id}))
+
+    @cherrypy.expose
+    def update_idp_credentials(self):
+        if cherrypy.request.method == 'GET':
+            if not self.master_password_manager:
+                return Template(filename='static/keychain.html').render(action='update_idp')
+            else:
+                pass
 
     @cherrypy.expose
     def update(self, **kwargs):
