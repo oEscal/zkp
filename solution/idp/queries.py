@@ -39,11 +39,5 @@ def setup_database():
                     "user text not null,"
                     "value text not null,"
                     "not_valid_after real not null,"
-                    "foreign key(user) references user(username)"
-                    ")")
-        con.execute("CREATE TABLE if not exists sessions ("
-                    "token text primary key,"
-                    "username text not null,"
-                    "expiration_date text not null,"
-                    "foreign key(username) references user(username)"
+                    "foreign key(user) references user(username) on update cascade on delete cascade"
                     ")")
