@@ -1,1 +1,1 @@
-{"escaleira": {"salt": "uIKL066ae+Xgsuof6bbhvQ==", "password": "3TuRSkUjLHRsseQzh1LtxE9owdaKBKHDAFeUJpSiUf0=", "idps": {"http://127.0.0.1:8082": ["ola", "escaleira"]}}}
+{"escaleira": {"salt": "zDuNTOLMfdL8GmnAuFLrtw==", "password": "4yfU4+qk74w2Y/fdydVry8cUlFQAROJwuBulKI60WC8=", "idps": {"http://127.0.0.1:8082": ["ola", "escaleira"], "http://127.0.0.1:8083": ["username", "test"]}}}

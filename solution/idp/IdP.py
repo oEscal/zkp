@@ -27,8 +27,8 @@ from utils.utils import ZKP_IdP, create_nonce, asymmetric_padding_signature, asy
 
 zkp_values: typing.Dict[str, ZKP_IdP] = {}
 public_key_values: typing.Dict[str, typing.Tuple[RSAPublicKey, bytes]] = {}
-MIN_ITERATIONS_ALLOWED = 100    # 300
-MAX_ITERATIONS_ALLOWED = 150    # 1000
+MIN_ITERATIONS_ALLOWED = 300
+MAX_ITERATIONS_ALLOWED = 1000
 KEYS_TIME_TO_LIVE = 3           # minutes
 
 
