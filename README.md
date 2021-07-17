@@ -58,6 +58,11 @@ Zero-Knowledge password-based authentications with a cache of temporary, asymmet
     ```sql
     insert into user values ('<username>', '<password>');
     ```
-    - There is already one registered that you can use: 
+    - There is already at least one registered that you can use: 
         - Username: `escaleira`
         - Password: `asfasdjfpoijasdfoijaspodifjajdpoij`
+
+    - You can find other users that possibly are already saved in the database with the following SQL command:
+       ```sql
+       select * from user;
+       ```   
