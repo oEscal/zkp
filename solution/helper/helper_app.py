@@ -92,12 +92,17 @@ class HelperApp(object):
                     print(f"Error status: {response.status_code}")
                     self.zkp_auth()
 
-    def zkp_auth(self):
+    def zkp_auth(self, restart=False):
         zkp = ZKP(self.password_manager.password)
         data_send = {
             'nonce': '',
         }
         for i in range(self.iterations):
+            if i == 0 and restart:
+                data_send['restart'] = restart
+            else:
+                data_send['restart'] = False
+
             data_send['nonce'] = zkp.create_challenge()
             ciphered_params = self.cipher_auth.create_response({
                 **data_send,
@@ -285,12 +290,24 @@ class HelperApp(object):
             raise cherrypy.HTTPError(405)
 
     @cherrypy.expose
-    def update_idp_user(self):
+    def update_idp_user(self, **kwargs):
+        idp_user = self.password_manager.idp_username
+
         if cherrypy.request.method == 'GET':
-            return Template(filename='static/update_idp_user.html').render(idp=self.idp,
-                                                                           user=self.password_manager.idp_username)
+            return Template(filename='static/update_idp_user.html').render(idp=self.idp, user=idp_user)
         elif cherrypy.request.method == 'POST':
-            pass
+            message = self.update_idp_user_credentials(idp_user=idp_user, idp=self.idp,
+                                                       username=kwargs['username'] if 'username' in kwargs else '',
+                                                       password=kwargs['password'] if 'password' in kwargs else '')
+            if message:
+                return Template(filename='static/update_idp_user.html').render(idp=self.idp, user=idp_user,
+                                                                               message=message)
+
+            self.zkp_auth(restart=True)
+            raise cherrypy.HTTPRedirect(create_get_url(f"{self.idp}/identity",
+                                                       params={'saml_id': self.saml_id}))
+        else:
+            raise cherrypy.HTTPError(405)
 
     def update_idp_user_credentials(self, idp_user: str, idp: str,  username: str = '', password: str = '') -> str:
         master_username = self.master_password_manager.username
@@ -309,10 +326,10 @@ class HelperApp(object):
         # update password
         if password:
             master_password = self.master_password_manager.master_password
-            password_manager = Password_Manager(master_username=master_username, master_password=master_password,
-                                                idp_user=idp_user, idp=idp)
+            self.password_manager = Password_Manager(master_username=master_username, master_password=master_password,
+                                                     idp_user=idp_user, idp=idp)
 
-            if not password_manager.update_idp_password(new_password=password.encode()):
+            if not self.password_manager.update_idp_password(new_password=password.encode()):
                 return "Error: Error updating the user's password!"
 
         return ''

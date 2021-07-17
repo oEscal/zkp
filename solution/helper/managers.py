@@ -1,7 +1,7 @@
 import base64
 import json
 from datetime import datetime, timedelta
-from os import urandom, rename
+from os import urandom, rename, path
 
 from cryptography.exceptions import InvalidKey
 from cryptography.hazmat.backends import default_backend
@@ -292,22 +292,26 @@ class Password_Manager(object):
         rename(f"{KEYS_DIRECTORY}/{previous_idp_user}_secret_{master_username}_{idp_base64}",
                f"{KEYS_DIRECTORY}/{new_idp_user}_secret_{master_username}_{idp_base64}")
 
-        # change the private key file name
-        rename(f"{KEYS_DIRECTORY}/{previous_idp_user}_{master_username}_{idp_base64}.pem",
-               f"{KEYS_DIRECTORY}/{new_idp_user}_{master_username}_{idp_base64}.pem")
+        # change the private key file name if exists
+        private_key_path = f"{KEYS_DIRECTORY}/{previous_idp_user}_{master_username}_{idp_base64}.pem"
+        if path.exists(private_key_path):
+            rename(private_key_path, f"{KEYS_DIRECTORY}/{new_idp_user}_{master_username}_{idp_base64}.pem")
 
     def update_idp_password(self, new_password: bytes) -> bool:
-        if not self.load_password() or not self.load_private_key(no_time_verification=True):
+        if not self.load_password():
             return False
+
+        private_key_load_success = self.load_private_key(no_time_verification=True)
 
         self.password = new_password
         self.save_password()
 
-        self.salt_private_key = urandom(AES_KEY_SALT_SIZE)
-        with open(f"{KEYS_DIRECTORY}/{self.idp_username}_{self.master_username}_{self.idp_base64}.pem", 'wb') as file:
-            file.write(f"{self.user_id}\n".encode())
-            file.write(f"{self.time_to_live}\n".encode())
-            file.write(self.salt_private_key)  # first AES_KEY_SALT_SIZE bytes
-            file.write(self.get_private_key_bytes(secret=self.private_key_secret()))
+        if private_key_load_success:
+            self.salt_private_key = urandom(AES_KEY_SALT_SIZE)
+            with open(f"{KEYS_DIRECTORY}/{self.idp_username}_{self.master_username}_{self.idp_base64}.pem", 'wb') as file:
+                file.write(f"{self.user_id}\n".encode())
+                file.write(f"{self.time_to_live}\n".encode())
+                file.write(self.salt_private_key)  # first AES_KEY_SALT_SIZE bytes
+                file.write(self.get_private_key_bytes(secret=self.private_key_secret()))
 
         return True

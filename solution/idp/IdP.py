@@ -29,7 +29,7 @@ zkp_values: typing.Dict[str, ZKP_IdP] = {}
 public_key_values: typing.Dict[str, typing.Tuple[RSAPublicKey, bytes]] = {}
 MIN_ITERATIONS_ALLOWED = 300
 MAX_ITERATIONS_ALLOWED = 1000
-KEYS_TIME_TO_LIVE = 10       # minutes
+KEYS_TIME_TO_LIVE = 3       # minutes
 
 
 class IdP(object):
@@ -76,6 +76,12 @@ class IdP(object):
 		saml_id = kwargs['saml_id']
 		current_zkp = zkp_values[saml_id]
 		request_args = current_zkp.decipher_response(kwargs)
+
+		# restart zkp
+		if 'restart' in request_args and request_args['restart']:
+			zkp_values[saml_id] = ZKP_IdP(key=current_zkp.key, saml_request=current_zkp.saml_request,
+			                              max_iterations=MAX_ITERATIONS_ALLOWED)
+			current_zkp = zkp_values[saml_id]
 
 		challenge = request_args['nonce'].encode()
 		if current_zkp.iteration < 2:
