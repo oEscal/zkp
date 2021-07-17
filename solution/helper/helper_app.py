@@ -26,6 +26,9 @@ class HelperApp(object):
         self.password_manager: Password_Manager = None
         self.master_password_manager: Master_Password_Manager = None
 
+        self.max_idp_iterations = 0
+        self.min_idp_iterations = 0
+
     @staticmethod
     def static_contents(path):
         return open(f"static/{path}", 'r').read()
@@ -43,7 +46,10 @@ class HelperApp(object):
             'zkp_idp_error': "Received error from IdP!",
             'idp_iterations': "The range of allowed iterations received from the IdP is incompatible with the range "
                               "allowed by the local app. A possible cause for this is the IdP we are contacting is not "
-                              "a trusted one!",
+                              "a trusted one!"
+                              "<br>"
+                              "You can access the page '<a href=\"/choose_iterations\">/choose_iterations</a>' to "
+                              "choose the number of iterations manually.",
             'zkp_auth_error': "There was an error on ZKP authentication. This could mean that or the introduced "
                               "password or username are incorrect, or the IdP we are contacting is not a trusted one!"
                               "<br>"
@@ -162,21 +168,58 @@ class HelperApp(object):
 
         self.idp = base64.urlsafe_b64decode(kwargs['idp']).decode()
 
-        max_iterations = int(kwargs['max_iterations'])
-        min_iterations = int(kwargs['min_iterations'])
-        if overlap_intervals(MIN_ITERATIONS_ALLOWED, MAX_ITERATIONS_ALLOWED, min_iterations, max_iterations):
-            self.iterations = random.randint(max(MIN_ITERATIONS_ALLOWED, min_iterations),
-                                             min(MAX_ITERATIONS_ALLOWED, max_iterations))
-        else:
-            raise cherrypy.HTTPRedirect(create_get_url(f"http://zkp_helper_app:1080/error",
-                                                       params={'error_id': 'idp_iterations'}), 301)
-
         self.saml_id = kwargs['saml_id']
 
         key = base64.urlsafe_b64decode(kwargs['key'])
         self.cipher_auth = Cipher_Authentication(key=key)
 
+        self.max_idp_iterations = int(kwargs['max_iterations'])
+        self.min_idp_iterations = int(kwargs['min_iterations'])
+        if overlap_intervals(MIN_ITERATIONS_ALLOWED, MAX_ITERATIONS_ALLOWED,
+                             self.min_idp_iterations, self.max_idp_iterations):
+            self.iterations = random.randint(max(MIN_ITERATIONS_ALLOWED, self.min_idp_iterations),
+                                             min(MAX_ITERATIONS_ALLOWED, self.max_idp_iterations))
+        else:
+            self.iterations = 0
+            raise cherrypy.HTTPRedirect(create_get_url(f"http://zkp_helper_app:1080/error",
+                                                       params={'error_id': 'idp_iterations'}), 301)
+
         return Template(filename='static/login.html').render(idp=self.idp)
+
+    @cherrypy.expose
+    def choose_iterations(self, **kwargs):
+        if self.iterations != 0:
+            raise cherrypy.HTTPError(401)
+
+        if cherrypy.request.method == 'GET':
+            return Template(filename='static/choose_iterations.html').render(idp=self.idp,
+                                                                             max_iterations=self.max_idp_iterations,
+                                                                             min_iterations=self.min_idp_iterations)
+        elif cherrypy.request.method == 'POST':
+            if 'deny' in kwargs:
+                return Template(filename='static/auth_refused.html').render()
+            elif 'allow' in kwargs:
+                if ('iterations' not in kwargs or not kwargs['iterations']
+                        or not kwargs['iterations'].isnumeric() or not int(kwargs['iterations'])):
+                    return Template(filename='static/choose_iterations.html').render(
+                        idp=self.idp,
+                        max_iterations=self.max_idp_iterations,
+                        min_iterations=self.min_idp_iterations,
+                        message="Error: You must select a number of iterations to use for the authentication!")
+
+                self.iterations = int(kwargs['iterations'])
+                # if we want to verify the number of iterations allowed by the IdP a priori
+                # if self.iterations < self.min_idp_iterations or self.iterations > self.max_idp_iterations:
+                #     return Template(filename='static/choose_iterations.html').render(
+                #         idp=self.idp,
+                #         max_iterations=self.max_idp_iterations,
+                #         min_iterations=self.min_idp_iterations,
+                #         message="Error: You must select a number of iterations belonging to the Identity Provider "
+                #                 "allowed interval, or deny the connection!")
+
+                return Template(filename='static/login.html').render(idp=self.idp)
+        else:
+            raise cherrypy.HTTPError(405)
 
     @cherrypy.expose
     def login(self, **kwargs):
